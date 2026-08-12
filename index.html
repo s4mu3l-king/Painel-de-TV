@@ -1,23 +1,122 @@
-<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Painel TV v2</title><style>*{box-sizing:border-box}body{margin:0;font-family:Arial;background:#101418;color:#fff}.panel{max-width:1000px;margin:25px auto;padding:24px;background:#1b2229;border-radius:14px}input,select,button{padding:11px;border-radius:8px;border:1px solid #3a4652}input,select{background:#0f1419;color:#fff}button{background:#2e7d32;color:#fff;cursor:pointer;border:0}.secondary{background:#37474f}.item{border:1px solid #35414d;padding:12px;border-radius:10px;margin:10px 0}.row{display:grid;grid-template-columns:150px 1fr 90px 110px 80px;gap:8px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}.small{color:#b8c2cc;font-size:13px}#viewer{display:none;position:fixed;inset:0;background:#000}#screen,#img,#video{width:100%;height:100%;border:0;display:none}#img{object-fit:contain}.exit{position:fixed;right:10px;top:10px;z-index:5;opacity:.1}@media(max-width:800px){.row{grid-template-columns:1fr 1fr}}</style></head><body>
-<div id="config" class="panel"><h1>📺 Painel de TV — v2</h1><p class="small">O link da TV é fixo. Você altera a programação aqui e salva; a TV atualiza automaticamente.</p><div id="status">Aguardando login...</div>
-<div id="login"><input id="pin" type="password" placeholder="PIN"><button onclick="login()">Entrar</button></div>
-<div id="admin" style="display:none"><div id="items"></div><div class="actions"><button onclick="add()">＋ Adicionar</button><button onclick="save()">💾 Salvar</button><button class="secondary" onclick="load()">↻ Recarregar</button><button class="secondary" onclick="copyTV()">🔗 Copiar link da TV</button><button class="secondary" onclick="openTV()">📺 Abrir TV</button></div></div></div>
-<div id="viewer"><button class="exit" onclick="location.href=location.pathname">⚙</button><iframe id="screen" allow="autoplay;fullscreen"></iframe><img id="img"><video id="video" autoplay muted playsinline></video></div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script>
-const URL_SB="https://wbejpcbuktfwprlxqjth.supabase.co",KEY="sb_publishable_5xajQWM2gMkKPLBLvKN2Hw_uauZ1pBm",PIN="Luc@s1210";let db,items=[],i=0,timer;
-const ok=()=>!URL_SB.startsWith("COLE_")&&!KEY.startsWith("COLE_");const stat=x=>document.getElementById("status").textContent=x;
-function login(){if(document.getElementById("pin").value!==PIN)return alert("PIN incorreto");document.getElementById("login").style.display="none";document.getElementById("admin").style.display="block";load()}
-function add(x={type:"url",name:"Novo item",url:"",seconds:30,active:true}){items.push(x);render()}
-function esc(x){return String(x||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;")}
-function render(){let itemsBox=document.getElementById("items");itemsBox.innerHTML="";items.forEach((x,n)=>{let d=document.createElement("div");d.className="item";d.innerHTML=`<div class="row"><input value="${esc(x.name)}" onchange="items[${n}].name=this.value" placeholder="Nome"><input value="${esc(x.url)}" onchange="items[${n}].url=this.value" placeholder="URL"><input type="number" min="1" value="${x.seconds||30}" onchange="items[${n}].seconds=+this.value"><select onchange="items[${n}].type=this.value"><option value="url" ${x.type=="url"?"selected":""}>Dashboard</option><option value="image" ${x.type=="image"?"selected":""}>Imagem</option><option value="video" ${x.type=="video"?"selected":""}>Vídeo</option></select><button onclick="items.splice(${n},1);render()">Excluir</button></div><p class="small">Item ${n+1} • ${x.seconds||30}s</p><button class="secondary" onclick="move(${n},-1)">↑</button> <button class="secondary" onclick="move(${n},1)">↓</button> <button class="secondary" onclick="items[${n}].active=items[${n}].active===false;render()">Ativar/Desativar</button>`;itemsBox.appendChild(d)})}
-function move(n,d){let j=n+d;if(j<0||j>=items.length)return;[items[n],items[j]]=[items[j],items[n]];render()}
-async function load(){if(!ok())return stat("⚠️ Preencha URL e KEY do Supabase no código.");db=db||supabase.createClient(URL_SB,KEY);let r=await db.from("tv_playlist").select("items,updated_at").eq("id",1).maybeSingle();if(r.error)return stat(r.error.message);items=r.data?.items||[];render();stat("✅ Carregado: "+(r.data?.updated_at||""))}
-async function save(){if(!ok())return alert("Configure o Supabase.");let r=await db.from("tv_playlist").upsert({id:1,items,updated_at:new Date().toISOString()});if(r.error)alert(r.error.message);else stat("✅ Salvo. A TV atualizará em até 30 segundos.")}
-function copyTV(){navigator.clipboard.writeText(location.href.split("?")[0]+"?tv=1");alert("Link fixo copiado!")}
-function openTV(){open(location.href.split("?")[0]+"?tv=1","_blank")}
-async function start(){if(!ok())return;db=supabase.createClient(URL_SB,KEY);document.getElementById("config").style.display="none";document.getElementById("viewer").style.display="block";await refresh();setInterval(refresh,30000)}
-async function refresh(){let r=await db.from("tv_playlist").select("items").eq("id",1).maybeSingle();if(r.data){let s=JSON.stringify(r.data.items||[]);if(s!==JSON.stringify(items)){items=r.data.items||[];i=0;show()}else if(!timer)show()}}
-function show(){clearTimeout(timer);let a=items.filter(x=>x.active!==false&&x.url);if(!a.length)return;if(i>=a.length)i=0;let x=a[i];let screen=document.getElementById("screen"),img=document.getElementById("img"),video=document.getElementById("video");screen.style.display=img.style.display=video.style.display="none";if(x.type=="image"){img.src=x.url;img.style.display="block"}else if(x.type=="video"){video.src=x.url;video.style.display="block";video.play().catch(()=>{})}else{screen.src=x.url;screen.style.display="block"}timer=setTimeout(()=>{i=(i+1)%a.length;show()},Math.max(1,x.seconds||30)*1000)}
-if(ok())stat("Ready / Digite o PIN");
-render();if(new URLSearchParams(location.search).get("tv")=="1")start();
+<!doctype html>
+
+<html lang="pt-BR"> <head> <meta charset="utf-8"> <meta name="viewport" content="width=device-width,initial-scale=1"> <title>Painel TV v2</title>
+
+<style> * { box-sizing: border-box; } body { margin: 0; font-family: Arial, sans-serif; background: #101418; color: #fff; } .panel { max-width: 1000px; margin: 25px auto; padding: 24px; background: #1b2229; border-radius: 14px; } input, select, button { padding: 11px; border-radius: 8px; border: 1px solid #3a4652; } input, select { background: #0f1419; color: #fff; width: 100%; } button { background: #2e7d32; color: #fff; cursor: pointer; border: 0; } button:hover { opacity: .9; } .secondary { background: #37474f; } .item { border: 1px solid #35414d; padding: 12px; border-radius: 10px; margin: 10px 0; } .row { display: grid; grid-template-columns: 150px 1fr 90px 110px 80px; gap: 8px; } .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 15px; } .small { color: #b8c2cc; font-size: 13px; } .status { margin: 15px 0; padding: 10px; border-radius: 8px; background: #0f1419; } #viewer { display: none; position: fixed; inset: 0; background: #000; } #screen, #img, #video { width: 100%; height: 100%; border: 0; display: none; } #img { object-fit: contain; } #video { object-fit: contain; background: #000; } .exit { position: fixed; right: 10px; top: 10px; z-index: 5; opacity: .1; } .exit:hover { opacity: 1; } .tv-info { position: fixed; bottom: 10px; left: 10px; z-index: 10; color: rgba(255,255,255,.3); font-size: 11px; } @media (max-width: 800px) { .row { grid-template-columns: 1fr 1fr; } } @media (max-width: 500px) { .panel { margin: 10px; padding: 15px; } .row { grid-template-columns: 1fr; } .actions button { width: 100%; } } </style>
+
+</head>
+
+<body>
+
+<!-- PAINEL DE CONFIGURAÇÃO -->
+
+<div id="config" class="panel">
+
+<h1>📺 Painel de TV — v2</h1>
+
+<p class="small">
+    O link da TV é fixo. Você altera a programação aqui e salva.
+    A TV consulta automaticamente as alterações.
+</p>
+
+<div id="status" class="status">
+    Aguardando login...
+</div>
+
+<!-- LOGIN -->
+<div id="login">
+
+    <input
+        id="pin"
+        type="password"
+        placeholder="Digite o PIN"
+        onkeydown="if(event.key === 'Enter') login()"
+    >
+
+    <br><br>
+
+    <button onclick="login()">
+        🔐 Entrar
+    </button>
+
+</div>
+
+<!-- ADMIN -->
+<div id="admin" style="display:none">
+
+    <h2>Programação</h2>
+
+    <div id="items"></div>
+
+    <div class="actions">
+
+        <button onclick="add()">
+            ＋ Adicionar
+        </button>
+
+        <button onclick="save()">
+            💾 Salvar
+        </button>
+
+        <button class="secondary" onclick="load()">
+            ↻ Recarregar
+        </button>
+
+        <button class="secondary" onclick="copyTV()">
+            🔗 Copiar link da TV
+        </button>
+
+        <button class="secondary" onclick="openTV()">
+            📺 Abrir TV
+        </button>
+
+    </div>
+
+</div>
+
+</div>
+
+<!-- VISUALIZAÇÃO DA TV -->
+
+<div id="viewer">
+
+<button
+    class="exit"
+    onclick="location.href=location.pathname"
+    title="Voltar para o painel"
+>
+    ⚙
+</button>
+
+<iframe
+    id="screen"
+    allow="autoplay; fullscreen"
+    allowfullscreen
+></iframe>
+
+<img
+    id="img"
+    alt="Imagem da programação"
+>
+
+<video
+    id="video"
+    autoplay
+    muted
+    playsinline
+></video>
+
+<div class="tv-info">
+    TV ONLINE
+</div>
+
+</div>
+
+<!-- SUPABASE -->
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script> /* ========================================================= CONFIGURAÇÃO ========================================================= */ const URL_SB = "https://wbejpcbuktfwprlxqjth.supabase.co"; const KEY = "sb_publishable_5xajQWM2gMkKPLBLvKN2Hw_uauZ1pBm"; const PIN = "Luc@s1210"; /* ========================================================= VARIÁVEIS ========================================================= */ let db = null; let items = []; let i = 0; let timer = null; let refreshTimer = null; /* ========================================================= VERIFICA SUPABASE ========================================================= */ function ok() { return ( URL_SB && KEY && !URL_SB.startsWith("COLE_") && !KEY.startsWith("COLE_") ); } /* ========================================================= STATUS ========================================================= */ function stat(text) { document.getElementById("status").textContent = text; } /* ========================================================= LOGIN ========================================================= */ function login() { const pin = document.getElementById("pin").value.trim(); if (pin !== PIN) { alert("PIN incorreto."); return; } document.getElementById("login").style.display = "none"; document.getElementById("admin").style.display = "block"; stat("Conectando ao banco..."); load(); } /* ========================================================= ADICIONAR ITEM ========================================================= */ function add(item = null) { if (!item) { item = { type: "url", name: "Novo item", url: "", seconds: 30, active: true }; } items.push(item); render(); } /* ========================================================= ESCAPE HTML ========================================================= */ function esc(value) { return String(value ?? "") .replace(/&/g, "&amp;") .replace(/"/g, "&quot;") .replace(/</g, "&lt;") .replace(/>/g, "&gt;"); } /* ========================================================= RENDERIZA OS ITENS ========================================================= */ function render() { const itemsBox = document.getElementById("items"); itemsBox.innerHTML = ""; if (!items.length) { itemsBox.innerHTML = ` <div class="item"> <div class="small"> Nenhum item cadastrado. Clique em "＋ Adicionar". </div> </div> `; return; } items.forEach((x, n) => { const d = document.createElement("div"); d.className = "item"; const ativo = x.active !== false; d.innerHTML = ` <div class="row"> <input value="${esc(x.name)}" onchange="items[${n}].name=this.value" placeholder="Nome" > <input value="${esc(x.url)}" onchange="items[${n}].url=this.value" placeholder="URL" > <input type="number" min="1" value="${Number(x.seconds) || 30}" onchange="items[${n}].seconds=Math.max(1, Number(this.value) || 30)" title="Tempo em segundos" > <select onchange="items[${n}].type=this.value" > <option value="url" ${x.type === "url" ? "selected" : ""} > Dashboard </option> <option value="image" ${x.type === "image" ? "selected" : ""} > Imagem </option> <option value="video" ${x.type === "video" ? "selected" : ""} > Vídeo </option> </select> <button onclick="removeItem(${n})" > Excluir </button> </div> <p class="small"> Item ${n + 1} • ${Number(x.seconds) || 30}s • ${ativo ? "ATIVO" : "DESATIVADO"} </p> <button class="secondary" onclick="move(${n}, -1)" > ↑ </button> <button class="secondary" onclick="move(${n}, 1)" > ↓ </button> <button class="secondary" onclick="toggleItem(${n})" > ${ativo ? "Desativar" : "Ativar"} </button> `; itemsBox.appendChild(d); }); } /* ========================================================= EXCLUIR ITEM ========================================================= */ function removeItem(n) { if (!confirm("Excluir este item?")) { return; } items.splice(n, 1); render(); } /* ========================================================= ATIVAR / DESATIVAR ========================================================= */ function toggleItem(n) { items[n].active = items[n].active === false; render(); } /* ========================================================= MOVER ITEM ========================================================= */ function move(n, direction) { const newPosition = n + direction; if ( newPosition < 0 || newPosition >= items.length ) { return; } [ items[n], items[newPosition] ] = [ items[newPosition], items[n] ]; render(); } /* ========================================================= CONEXÃO SUPABASE ========================================================= */ function connectDB() { if (!ok()) { throw new Error( "URL ou chave do Supabase não configurada." ); } if (!db) { db = supabase.createClient( URL_SB, KEY ); } return db; } /* ========================================================= CARREGAR PLAYLIST ========================================================= */ async function load() { try { connectDB(); stat("Carregando playlist..."); const result = await db .from("tv_playlist") .select("items, updated_at") .eq("id", 1) .maybeSingle(); if (result.error) { stat( "❌ Erro: " + result.error.message ); return; } items = result.data?.items || []; render(); stat( "✅ Playlist carregada. " + "Última atualização: " + ( result.data?.updated_at ? new Date( result.data.updated_at ).toLocaleString("pt-BR") : "Nunca" ) ); } catch (error) { stat( "❌ " + error.message ); } } /* ========================================================= SALVAR PLAYLIST ========================================================= */ async function save() { try { connectDB(); const cleanItems = items.map(x => ({ type: x.type || "url", name: String(x.name || ""), url: String(x.url || ""), seconds: Math.max( 1, Number(x.seconds) || 30 ), active: x.active !== false })); const result = await db .from("tv_playlist") .upsert({ id: 1, items: cleanItems, updated_at: new Date().toISOString() }); if (result.error) { alert( "Erro ao salvar:\n\n" + result.error.message ); return; } items = cleanItems; render(); stat( "✅ Salvo com sucesso! " + "A TV verificará a atualização automaticamente." ); } catch (error) { alert( "Erro:\n\n" + error.message ); } } /* ========================================================= LINK FIXO DA TV ========================================================= */ function tvLink() { const base = window.location.origin + window.location.pathname; return base + "?tv=1"; } /* ========================================================= COPIAR LINK DA TV ========================================================= */ async function copyTV() { const link = tvLink(); try { await navigator.clipboard.writeText(link); alert( "✅ Link fixo da TV copiado!\n\n" + link ); } catch (error) { prompt( "Copie o link da TV:", link ); } } /* ========================================================= ABRIR TV ========================================================= */ function openTV() { window.open( tvLink(), "_blank" ); } /* ========================================================= INICIAR MODO TV ========================================================= */ async function startTV() { try { connectDB(); document.getElementById( "config" ).style.display = "none"; document.getElementById( "viewer" ).style.display = "block"; await refreshTV(); clearInterval(refreshTimer); refreshTimer = setInterval( refreshTV, 30000 ); } catch (error) { console.error(error); } } /* ========================================================= ATUALIZAÇÃO DA TV ========================================================= */ async function refreshTV() { try { const result = await db .from("tv_playlist") .select("items, updated_at") .eq("id", 1) .maybeSingle(); if (result.error) { console.error( "Erro ao atualizar TV:", result.error.message ); return; } if (!result.data) { return; } const newItems = result.data.items || []; const oldJSON = JSON.stringify(items); const newJSON = JSON.stringify(newItems); if (oldJSON !== newJSON) { items = newItems; i = 0; show(); return; } if (!timer) { show(); } } catch (error) { console.error( "Erro:", error ); } } /* ========================================================= MOSTRAR ITEM ========================================================= */ function show() { clearTimeout(timer); const activeItems = items.filter( x => x.active !== false && x.url ); if (!activeItems.length) { document.getElementById("screen").style.display = "none"; document.getElementById("img").style.display = "none"; document.getElementById("video").style.display = "none"; return; } if (i >= activeItems.length) { i = 0; } const item = activeItems[i]; const screen = document.getElementById("screen"); const img = document.getElementById("img"); const video = document.getElementById("video"); /* Esconde tudo */ screen.style.display = "none"; img.style.display = "none"; video.style.display = "none"; /* ===================================================== IMAGEM ===================================================== */ if (item.type === "image") { img.src = item.url; img.style.display = "block"; img.onerror = () => { console.error( "Erro ao carregar imagem:", item.url ); }; } /* ===================================================== VÍDEO ===================================================== */ else if (item.type === "video") { video.src = item.url; video.style.display = "block"; video.currentTime = 0; video.play().catch( error => console.log( "Autoplay bloqueado:", error ) ); } /* ===================================================== DASHBOARD / URL ===================================================== */ else { screen.src = item.url; screen.style.display = "block"; } /* ===================================================== PRÓXIMO ITEM ===================================================== */ const seconds = Math.max( 1, Number(item.seconds) || 30 ); timer = setTimeout( () => { i = (i + 1) % activeItems.length; show(); }, seconds * 1000 ); } /* ========================================================= INICIALIZAÇÃO ========================================================= */ render(); if (ok()) { stat( "✅ Sistema pronto. Digite o PIN." ); } else { stat( "⚠️ Configure o Supabase." ); } /* ========================================================= DETECTA MODO TV ========================================================= */ const params = new URLSearchParams( window.location.search ); if ( params.get("tv") === "1" ) { startTV(); } </script>
+
+</body> </html>
 </script></body></html>
