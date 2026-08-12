@@ -1,0 +1,11 @@
+PAINEL TV V2
+
+1. Crie um projeto gratuito no Supabase.
+2. Rode supabase.sql no SQL Editor.
+3. Copie Project URL e anon/public key para index.html.
+4. Troque PIN=1234 por seu PIN.
+5. Publique index.html no GitHub Pages.
+6. Administração: https://SEU_SITE/
+7. TV: https://SEU_SITE/?tv=1
+
+O link da TV permanece FIXO. Alterações salvas no painel ficam no banco e a TV consulta a cada 30 segundos.
